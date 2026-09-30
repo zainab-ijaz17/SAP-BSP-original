@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { DEFAULT_PLANT } from '../constants/warehouse';
 import { getUserCredentials } from '../api';
 
 function CharMigoPage({ user, onLogout }) {
@@ -106,7 +105,7 @@ function CharMigoPage({ user, onLogout }) {
             HeaderId: "1",
             ItemNo: String(index + 1).padStart(6, '0'),
             Material: String(batchItem.MATNR || '').padStart(18, '0'),
-            Plant: batchItem.Werks || DEFAULT_PLANT,
+            Plant: batchItem.Werks || '',
             StgeLoc: batchItem.LGORT || '',
             Quantity: String(batchItem.QTY || '0'),
             EntryUom: batchItem.MEINS || '',
@@ -142,7 +141,7 @@ function CharMigoPage({ user, onLogout }) {
         HeaderId: "1",
         ItemNo: "000001",
         Material: String(batchContent.MATNR || '').padStart(18, '0'),
-        Plant: batchContent.Werks || DEFAULT_PLANT,
+        Plant: batchContent.Werks || '',
         StgeLoc: batchContent.LGORT || '',
         Quantity: String(batchContent.QTY || '0'),
         EntryUom: batchContent.MEINS || '',
@@ -468,4 +467,4 @@ function CharMigoPage({ user, onLogout }) {
   );
 }
 
-export default CharMigoPage;
+export default CharMigoPage;

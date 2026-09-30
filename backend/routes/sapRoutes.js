@@ -440,4 +440,68 @@ router.get("/BatchInfoGateway/:batchNumber", async (req, res) => {
   }
 });
 
+// GET batch characteristics (classification) from SAP API Management gateway
+// Requires ?material=<MATNR> because the service filters on Batch and Material
+router.get("/BatchCharacteristics/:batchNumber", async (req, res) => {
+  const { batchNumber } = req.params;
+  const material = String(req.query.material || '').trim();
+  if (!batchNumber) return res.status(400).json({ error: "Batch number is required" });
+  if (!material) return res.status(400).json({ error: "Material is required" });
+
+  const userEnvironment = req.headers['x-user-environment'] || '110';
+  const isProduction = userEnvironment === '300' || userEnvironment === 'prd';
+  const baseUrl = isProduction
+    ? (process.env.PRD_BATCH_CHAR_URL || 'https://prdspace.prod01.apimanagement.eu10.hana.ondemand.com/batch/char')
+    : (process.env.DEV_BATCH_CHAR_URL || 'https://devspace.test.apimanagement.eu10.hana.ondemand.com/batch/char');
+
+  let username = SAP_USER;
+  let password = SAP_PASS;
+  const userAuthHeader = req.headers['x-user-auth'];
+  if (userAuthHeader) {
+    try {
+      [username, password] = Buffer.from(userAuthHeader, 'base64').toString().split(':');
+    } catch (e) {
+      return res.status(401).json({ error: 'Invalid user credentials format' });
+    }
+  } else if (isProduction) {
+    return res.status(401).json({ error: 'User credentials required' });
+  }
+
+  // Numeric material numbers are sent without leading zeros (e.g. 8000015265)
+  const materialParam = /^\d+$/.test(material) ? material.replace(/^0+/, '') : material;
+  const esc = (v) => String(v).replace(/'/g, "''");
+  const filter = `Batch eq '${esc(batchNumber)}' and Material eq '${esc(materialParam)}'`;
+  const url = `${baseUrl}/BatchCharacteristicSet?$filter=${encodeURIComponent(filter)}&$format=json`;
+  console.log(`[${new Date().toISOString()}] ${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'}: Fetching characteristics from ${url}`);
+
+  try {
+    const response = await axios.get(url, {
+      httpsAgent,
+      auth: { username, password },
+      headers: {
+        'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      validateStatus: () => true,
+      timeout: 30000
+    });
+
+    if (response.status === 200) {
+      return res.json(response.data?.d?.results || []);
+    }
+
+    return res.status(response.status || 500).json({
+      error: "Error fetching batch characteristics from SAP",
+      status: response.status,
+      data: response.data
+    });
+  } catch (error) {
+    console.error("Error calling batch characteristics API:", error.message);
+    return res.status(500).json({
+      error: "Failed to connect to SAP API",
+      details: error.message
+    });
+  }
+});
+
 module.exports = router;

@@ -184,7 +184,7 @@ function MigoPage({ user, onLogout }) {
       const isProduction = creds.environment === '300' || creds.environment === 'prd';
       const baseUrl = isProduction 
         ? 'http://192.168.60.111:5000'  // Local server for production (300/prd)
-        : 'https://sap-app.cfapps.eu10-004.hana.ondemand.com';  // Default for development (110/dev)
+        : 'https://sap-app1.cfapps.eu10-004.hana.ondemand.com';  // Default for development (110/dev)
       
       // Use unified endpoints - backend handles CSRF tokens internally
       const endpoint = isTestRun ? '/api/migo/check' : '/api/migo/post';

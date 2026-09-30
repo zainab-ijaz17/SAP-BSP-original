@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { getUserCredentials } from '../api';
-import { apiEndpoints } from "../config/servers";
 
 function BspPage({ user, onLogout }) {
   const navigate = useNavigate();
@@ -13,6 +12,7 @@ function BspPage({ user, onLogout }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showClearAllConfirm, setShowClearAllConfirm] = useState(false);
   const [success, setSuccess] = useState(() => {
     const state = location.state;
     if (state?.migoPostSuccess) {
@@ -75,8 +75,8 @@ function BspPage({ user, onLogout }) {
       // Use different URLs based on environment
       const isProduction = creds.environment === '300' || creds.environment === 'prd';
       const baseUrl = isProduction 
-        ? 'http://192.168.60.111:5000'  // Local server for production (300/prd)
-        : 'https://sap-app.cfapps.eu10-004.hana.ondemand.com';  // Default for development (110/dev)
+        ? 'https://sap-app1.cfapps.eu10-004.hana.ondemand.com'  // Local server for production (300/prd)
+        : 'https://sap-app1.cfapps.eu10-004.hana.ondemand.com';  // Default for development (110/dev)
       
       const endpoint = `/api/BatchInfoGateway/${input}`;
       
@@ -118,10 +118,19 @@ function BspPage({ user, onLogout }) {
   };
 
   const clearAll = () => {
+    setShowClearAllConfirm(true);
+  };
+
+  const confirmClearAll = () => {
     setBatches([]);
     setSelectedBatch(null);
     setShowDetailsPopup(false);
     setError(null);
+    setShowClearAllConfirm(false);
+  };
+
+  const cancelClearAll = () => {
+    setShowClearAllConfirm(false);
   };
 
   const openDetails = (batch) => {
@@ -211,6 +220,64 @@ function BspPage({ user, onLogout }) {
         </div>
       )}
 
+      {/* Clear All Confirmation Dialog */}
+      {showClearAllConfirm && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            padding: '2rem',
+            borderRadius: '12px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            maxWidth: '400px',
+            width: '90%'
+          }}>
+            <h3 style={{ margin: '0 0 1rem 0', color: '#333' }}>Clear All Batches</h3>
+            <p style={{ margin: '0 0 1.5rem 0', color: '#666' }}>
+              Are you sure you want to clear all batches? This action cannot be undone.
+            </p>
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+              <button
+                onClick={cancelClearAll}
+                style={{
+                  padding: '0.75rem 1.5rem',
+                  border: '1px solid #ddd',
+                  backgroundColor: 'white',
+                  color: '#666',
+                  borderRadius: '6px',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmClearAll}
+                style={{
+                  padding: '0.75rem 1.5rem',
+                  border: 'none',
+                  backgroundColor: '#ef4444',
+                  color: 'white',
+                  borderRadius: '6px',
+                  cursor: 'pointer'
+                }}
+              >
+                Clear All
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={{ maxWidth: "600px", margin: "20px auto", padding: "1rem" }}>
         <div style={{ background: "white", borderRadius: "12px", padding: "1.5rem", boxShadow: "0 4px 12px rgba(0,0,0,0.06)" }}>
 
@@ -252,6 +319,20 @@ function BspPage({ user, onLogout }) {
             </button>
           </div>
 
+          <div
+  style={{
+    marginTop: "0.75rem",
+    textAlign: "center",
+    fontWeight: "600",
+    color: "#374151",
+    padding: "0.75rem",
+    background: "#f3f4f6",
+    borderRadius: "8px"
+  }}
+>
+  Batches Scanned: {batches.length}
+</div>
+
           {error && <div style={{ background: "#fee2e2", color: "#b91c1c", padding: "0.75rem", borderRadius: "8px", marginTop: "0.5rem" }}>{error}</div>}
 
           {batches.length > 0 && (
@@ -259,9 +340,10 @@ function BspPage({ user, onLogout }) {
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr>
-                    <th style={{ textAlign: "left", padding: "0.5rem" }}>Batch Number</th>
-                    <th style={{ textAlign: "left", padding: "0.5rem" }}>Quantity</th>
-                    <th style={{ textAlign: "right", padding: "0.5rem" }}></th>
+                    <th style={{ textAlign: "center", padding: "0.5rem", fontSize: "0.75rem" }}>Batch #</th>
+                    <th style={{ textAlign: "center", padding: "0.5rem", fontSize: "0.75rem" }}>Quantity</th>
+                    <th style={{ textAlign: "center", padding: "0.5rem", fontSize: "0.75rem" }}>Loc</th>
+                    <th style={{ textAlign: "center", padding: "0.5rem", fontSize: "0.75rem" }}></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -271,9 +353,10 @@ function BspPage({ user, onLogout }) {
                       onClick={() => openDetails(batch)}
                       style={{ cursor: "pointer", background: selectedBatch?.d?.Charg === batch.d?.Charg ? "#e0f2fe" : "white", borderBottom: "12px solid #f3f4f6" }}
                     >
-                      <td>{batch.d?.Charg}</td>
-                      <td>{batch.d?.QTY}</td>
-                      <td style={{ padding: "0.5rem", textAlign: "right" }} onClick={(e) => e.stopPropagation()}>
+                      <td style={{ textAlign: "center", padding: "0.5rem" , fontSize: "0.75rem" }}>{batch.d?.Charg}</td>
+                      <td style={{ textAlign: "center", padding: "0.5rem" , fontSize: "0.75rem" }}>{batch.d?.QTY}</td>
+                      <td style={{ textAlign: "center", padding: "0.5rem" , fontSize: "0.75rem" }}>{batch.d?.LGORT || '-'}</td>
+                      <td style={{ textAlign: "center", padding: "0.5rem" }} onClick={(e) => e.stopPropagation()}>
                         <button
                           onClick={() => deleteOne(batch.d?.Charg)}
                           style={{ padding: "0.35rem 0.75rem", background: "#ef4444", color: "#fff", border: "none", borderRadius: "8px" }}
@@ -289,6 +372,7 @@ function BspPage({ user, onLogout }) {
           )}
         </div>
       </div>
+
 
       <div style={{ position: "fixed", bottom: "20px", left: "20px" }}>
         <button

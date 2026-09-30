@@ -77,51 +77,44 @@ function CharPage({ user, onLogout }) {
 
       const baseUrl = 'https://sap-app1.cfapps.eu10-004.hana.ondemand.com';
       
-      const batchEndpoint = `/api/BatchInfoGateway/${input}`;
-      const charEndpoint = `/api/BatchCharacteristics/${input}`;
-      
       const headers = {
         'X-User-Auth': btoa(`${creds.username}:${creds.password}`),
         'X-User-Environment': creds.environment
       };
 
-      // Both pipelines run simultaneously 
-      const [batchResult, charResult] = await Promise.allSettled([
-        fetch(`${baseUrl}${batchEndpoint}`, { headers }),
-        fetch(`${baseUrl}${charEndpoint}`, { headers })
-      ]);
-
-      // Check Core Batch validation checks
-      if (batchResult.status === "rejected") {
-        throw new Error(`Failed core request: ${batchResult.reason.message}`);
-      }
-      
-      const resBatch = batchResult.value;
+      // Core batch info first - the characteristics service needs the material number
+      const resBatch = await fetch(`${baseUrl}/api/BatchInfoGateway/${input}`, { headers });
       if (!resBatch.ok) throw new Error("Failed to fetch core batch information from SAP.");
 
       const json = await resBatch.json();
-      const d = json?.d || json; 
+      const d = json?.d || json;
       if (!d?.Charg) throw new Error("Failed to fetch batch information. Empty response object.");
 
-      // Parse Characteristics safely
+      // Parse Characteristics safely - a failure here should not block adding the batch
       let noOfSheets = "-";
-      if (charResult.status === "fulfilled" && charResult.value.ok) {
+      const material = d.MATNR || d.Matnr || d.Material;
+      if (material) {
         try {
-          const charJson = await charResult.value.json();
-          const resultsArray = Array.isArray(charJson) ? charJson : (charJson?.d?.results || []);
-          const sheetRecord = resultsArray.find(
-  item =>
-    item.CharName === "Z_1223_NO_OF_SHEETS" ||
-    item.CharacteristicName === "Z_1223_NO_OF_SHEETS" ||
-    item.ATNAM === "Z_1223_NO_OF_SHEETS"
-);
-          
-          if (sheetRecord && sheetRecord.CharValue) {
-            const rawValue =
-  sheetRecord.CharValue ||
-  sheetRecord.CharacteristicValue ||
-  sheetRecord.ATWRT;
-            noOfSheets = isNaN(Number(rawValue)) ? rawValue : String(Number(rawValue));
+          const charEndpoint = `/api/BatchCharacteristics/${encodeURIComponent(input)}?material=${encodeURIComponent(material)}`;
+          const resChar = await fetch(`${baseUrl}${charEndpoint}`, { headers });
+          if (resChar.ok) {
+            const charJson = await resChar.json();
+            const resultsArray = Array.isArray(charJson) ? charJson : (charJson?.d?.results || []);
+            const nameOf = (item) => item.CharName || item.CharacteristicName || item.Charact || item.ATNAM || item.Atnam;
+            const sheetRecord = resultsArray.find(item => nameOf(item) === "Z_1223_NO_OF_SHEETS");
+
+            const rawValue = sheetRecord && (
+              sheetRecord.CharValue ||
+              sheetRecord.CharacteristicValue ||
+              sheetRecord.ValueChar ||
+              sheetRecord.ATWRT ||
+              sheetRecord.Atwrt
+            );
+            if (rawValue) {
+              noOfSheets = isNaN(Number(rawValue)) ? rawValue : String(Number(rawValue));
+            }
+          } else {
+            console.warn("Batch characteristics request failed:", resChar.status);
           }
         } catch (e) {
           console.warn("Characteristics payload extraction parsing warning:", e);
