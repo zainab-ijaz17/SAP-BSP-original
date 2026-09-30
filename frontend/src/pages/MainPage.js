@@ -12,6 +12,11 @@ function MainPage({ user, onLogout }) {
       title: "BSP FH Transfer Posting",
       path: "/bsp"
     },
+    {
+      id: "char-transfer",
+      title: "Batch Characteristics Transfer Posting",
+      path: "/char"
+    },
   ];
 
   const handleTileClick = (path) => {

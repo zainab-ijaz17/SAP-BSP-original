@@ -5,6 +5,8 @@ import MainPage from "./pages/MainPage";
 import BspPage from "./pages/BspPage";
 import MigoPage from "./pages/MigoPage";
 import SplashScreen from "./pages/SplashScreen";
+import CharPage from "./pages/CharPage";
+import CharMigoPage from "./pages/CharMigoPage";
 
 function SplashScreenWrapper() {
   const navigate = useNavigate();
@@ -76,7 +78,23 @@ function App() {
               <ProtectedRoute>
                 <MigoPage user={user} onLogout={handleLogout} />
               </ProtectedRoute>
-            } 
+            }
+          />
+          <Route
+            path="/char"
+            element={
+              <ProtectedRoute>
+                <CharPage user={user} onLogout={handleLogout} />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/char-migo"
+            element={
+              <ProtectedRoute>
+                <CharMigoPage user={user} onLogout={handleLogout} />
+              </ProtectedRoute>
+            }
           />
         </Routes>
       </div>

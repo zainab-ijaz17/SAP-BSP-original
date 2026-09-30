@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { DEFAULT_PLANT } from '../constants/warehouse';
 import { getUserCredentials } from '../api';
 
 function MigoPage({ user, onLogout }) {
@@ -104,7 +105,7 @@ function MigoPage({ user, onLogout }) {
             HeaderId: "1",
             ItemNo: String(index + 1).padStart(6, '0'),
             Material: String(batchItem.MATNR || '').padStart(18, '0'),
-            Plant: batchItem.Werks || '',
+            Plant: batchItem.Werks || DEFAULT_PLANT,
             StgeLoc: batchItem.LGORT || '',
             Quantity: String(batchItem.QTY || '0'),
             EntryUom: batchItem.MEINS || '',
@@ -133,7 +134,7 @@ function MigoPage({ user, onLogout }) {
         HeaderId: "1",
         ItemNo: "000001",
         Material: String(batchContent.MATNR || '').padStart(18, '0'),
-        Plant: batchContent.Werks || '',
+        Plant: batchContent.Werks || DEFAULT_PLANT,
         StgeLoc: batchContent.LGORT || '',
         Quantity: String(batchContent.QTY || '0'),
         EntryUom: batchContent.MEINS || '',
