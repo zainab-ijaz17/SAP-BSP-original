@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { getUserCredentials } from '../api';
+import { DEFAULT_PLANT } from '../constants/warehouse';
 
 function BspPage({ user, onLogout }) {
   const navigate = useNavigate();
@@ -74,11 +75,12 @@ function BspPage({ user, onLogout }) {
 
       // Use different URLs based on environment
       const isProduction = creds.environment === '300' || creds.environment === 'prd';
-      const baseUrl = isProduction 
-        ? 'https://sap-app1.cfapps.eu10-004.hana.ondemand.com'  // Local server for production (300/prd)
-        : 'https://sap-app1.cfapps.eu10-004.hana.ondemand.com';  // Default for development (110/dev)
-      
-      const endpoint = `/api/BatchInfoGateway/${input}`;
+      // Always call the deployed backend; for 300/prd it fetches batches via the grp batch API
+      const baseUrl = 'https://sap-app1.cfapps.eu10-004.hana.ondemand.com';
+
+      const endpoint = isProduction
+        ? `/api/BatchInfoGateway/${input}?plant=${DEFAULT_PLANT}`
+        : `/api/BatchInfoGateway/${input}`;
       
       const res = await fetch(`${baseUrl}${endpoint}`, {
         headers: {
@@ -86,7 +88,11 @@ function BspPage({ user, onLogout }) {
           'X-User-Environment': creds.environment
         }
       });
-      if (!res.ok) throw new Error("Failed to fetch batch information.");
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => null);
+        const detail = errBody?.message || errBody?.error;
+        throw new Error(`Failed to fetch batch information (${res.status})${detail ? `: ${typeof detail === 'string' ? detail : JSON.stringify(detail)}` : '.'}`);
+      }
       const json = await res.json();
       const d = json?.d || json; // Handle both old and new response formats
       if (!d?.Charg || Number(d.QTY) <= 0) throw new Error("Failed to fetch batch information");

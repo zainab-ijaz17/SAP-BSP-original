@@ -19,6 +19,12 @@ const ENVIRONMENT_BASE_URLS = {
 };
 const BSP_SERVICE_PATH = process.env.BSP_SERVICE_PATH; // e.g., /sap/opu/odata/sap/ZUM_BSP_BATCH_INFORMATION_SRV
 
+// Production (300) batch lookup always goes through the grp batch proxy, not the old /bsp/prd/batch one.
+// Uses its own env var name so a stale PRD_300_BATCH_URL on the deployed app can't redirect it.
+const PRD_GRP_BATCH_URL = (process.env.PRD_GRP_BATCH_URL || 'https://prdspace.prod01.apimanagement.eu10.hana.ondemand.com/grp/batch').replace(/\/+$/, '');
+const PRD_GRP_BATCH_SET_URL = `${PRD_GRP_BATCH_URL}/BatchInfoSet`;
+const DEFAULT_BATCH_PLANT = process.env.DEFAULT_BATCH_PLANT || '1223';
+
 // Ignore SSL certificate errors (for dev/self-signed SSL)
 const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 
@@ -53,7 +59,7 @@ router.get("/batch/300/:batchNumber", async (req, res) => {
   }
 
   // Get the base URL from environment variables
-  const baseUrl = process.env.PRD_300_BATCH_URL || 'https://prdspace.prod01.apimanagement.eu10.hana.ondemand.com/bsp/prd/batch/BatchInfoSet';
+  const baseUrl = PRD_GRP_BATCH_SET_URL;
 
   // Construct the full URL with the batch number
   const url = `${baseUrl}?$filter=BatchNumber eq '${batchNumber}'`;
@@ -185,10 +191,12 @@ router.get("/BatchInfoGateway/:batchNumber", async (req, res) => {
   
   if (isProduction) {
     // Use production endpoint for 300/prd environment
-    const baseUrl = process.env.PRD_300_BATCH_URL || 'https://prdspace.prod01.apimanagement.eu10.hana.ondemand.com/bsp/prd/batch/BatchInfoSet';
-    // Use the full endpoint URL directly
+    const baseUrl = PRD_GRP_BATCH_SET_URL;
+    const plant = String(req.query.plant || DEFAULT_BATCH_PLANT).trim();
+    const esc = (v) => String(v).replace(/'/g, "''");
+    const buildUrl = (filter) => `${baseUrl}?$filter=${encodeURIComponent(filter)}&$format=json`;
     // OData filter syntax: $filter=FieldName eq 'value'
-    let url = `${baseUrl}?$filter=BatchNumber eq '${batchNumber}'`;
+    let url = buildUrl(`Charg eq '${esc(batchNumber)}' and Werks eq '${esc(plant)}'`);
     console.log('Trying URL format 1:', url);
     console.log(`[${new Date().toISOString()}] PRODUCTION: Fetching batch ${batchNumber} from ${url}`);
     
@@ -215,8 +223,8 @@ router.get("/BatchInfoGateway/:batchNumber", async (req, res) => {
       
       // First, get CSRF token from the service root
       // Extract service root by removing the entity set path (BatchInfoSet)
-      // baseUrl format: https://...domain.../bsp/prd/batch/BatchInfoSet
-      // Service root should be: https://...domain.../bsp/prd/batch
+      // baseUrl format: https://...domain.../grp/batch/BatchInfoSet
+      // Service root should be: https://...domain.../grp/batch
       let baseUrlForCsrf = baseUrl;
       if (baseUrl.includes('/BatchInfoSet')) {
         baseUrlForCsrf = baseUrl.replace('/BatchInfoSet', '');
@@ -349,10 +357,10 @@ router.get("/BatchInfoGateway/:batchNumber", async (req, res) => {
         return res.status(404).json({ error: "Batch not found" });
       }
       
-      // If 400 error, try with Charg field name instead of BatchNumber (some SAP services use different field names)
+      // If 400 error, the service may not accept Werks in the filter: retry on batch only and pick the plant's row
       if (response.status === 400) {
-        console.log('Trying alternative filter with Charg field name');
-        const altUrl = `${baseUrl}?$filter=Charg eq '${batchNumber}'`;
+        console.log('Trying alternative filter on Charg only');
+        const altUrl = buildUrl(`Charg eq '${esc(batchNumber)}'`);
         try {
           const altResponse = await axios.get(altUrl, {
             httpsAgent: new https.Agent({ 
@@ -369,12 +377,15 @@ router.get("/BatchInfoGateway/:batchNumber", async (req, res) => {
             maxRedirects: 0
           });
           
+          console.log(`Alternative response status: ${altResponse.status}`);
+          console.log('Alternative response data:', JSON.stringify(altResponse.data, null, 2));
           if (altResponse.status === 200) {
             const batchData = altResponse.data?.d?.results || [altResponse.data];
-            if (batchData && batchData.length > 0) {
-              return res.json(Array.isArray(batchData) ? batchData[0] : batchData);
+            const plantRow = batchData.find(b => !b?.Werks || b.Werks === plant);
+            if (plantRow) {
+              return res.json(plantRow);
             }
-            return res.status(404).json({ error: "Batch not found" });
+            return res.status(404).json({ error: `Batch not found in plant ${plant}` });
           }
           console.log('Alternative URL also failed with status:', altResponse.status);
         } catch (altError) {

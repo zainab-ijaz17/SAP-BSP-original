@@ -76,7 +76,7 @@ function CharPage({ user, onLogout }) {
       if (!creds) throw new Error("User not authenticated. Please log in again.");
 
       const baseUrl = 'https://sap-app1.cfapps.eu10-004.hana.ondemand.com';
-      
+
       const headers = {
         'X-User-Auth': btoa(`${creds.username}:${creds.password}`),
         'X-User-Environment': creds.environment
